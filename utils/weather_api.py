@@ -53,6 +53,48 @@ def get_forecast(lat, lon):
     except Exception as err:
         return {"error": f"Error: {err}"}
 
+def get_weather_by_city(city_name):
+    """
+    Fetch current weather by city name.
+    """
+    if not OPENWEATHER_API_KEY:
+        return {"error": "API Key missing"}
+        
+    try:
+        params = {
+            "q": city_name,
+            "appid": OPENWEATHER_API_KEY,
+            "units": "metric"
+        }
+        response = requests.get(BASE_URL_WEATHER, params=params)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.HTTPError:
+        return {"error": f"City '{city_name}' not found or API error."}
+    except Exception as err:
+        return {"error": f"Error: {err}"}
+
+def get_forecast_by_city(city_name):
+    """
+    Fetch 5-day forecast by city name.
+    """
+    if not OPENWEATHER_API_KEY:
+        return {"error": "API Key missing"}
+        
+    try:
+        params = {
+            "q": city_name,
+            "appid": OPENWEATHER_API_KEY,
+            "units": "metric"
+        }
+        response = requests.get(BASE_URL_FORECAST, params=params)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.HTTPError:
+        return {"error": f"City '{city_name}' not found or API error."}
+    except Exception as err:
+        return {"error": f"Error: {err}"}
+
 def format_weather_for_ai(weather_data):
     """
     Format raw weather JSON into a natural language string for the AI context.

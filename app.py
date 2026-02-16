@@ -34,9 +34,13 @@ if user_input:
     with st.chat_message("assistant"):
         with st.spinner("FarmBuddy is thinking..."):
             try:
-                # Pass the entire message history to the API
-                response = ask_gemini(st.session_state.messages)
-                st.write(response)
+                # Pass the entire message history to the API with streaming
+                # ask_gemini now supports stream=True and handles history internally
+                stream = ask_gemini(st.session_state.messages, stream=True)
+                
+                # Stream the response
+                response = st.write_stream(stream)
+                
                 st.session_state.messages.append({"role": "assistant", "content": response})
             except Exception as e:
                 error_msg = f"⚠️ Error connecting to AI: {str(e)}"

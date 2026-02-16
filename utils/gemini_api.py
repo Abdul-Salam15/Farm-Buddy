@@ -16,39 +16,44 @@ Your goal is to provide accurate, practical, and easy-to-understand farming advi
 """
 
 model = genai.GenerativeModel(
-    "gemini-flash-latest",
+    "gemini-flash-lite-latest",
     system_instruction=SYSTEM_INSTRUCTION
 )
 
-def ask_gemini(messages_history: list, weather_context=None) -> str:
+def ask_gemini(messages_history: list, weather_context=None, stream=False):
     """
-    Sends the full conversation history to Gemini for a context-aware response.
-    messages_history: List of dicts [{"role": "user", "content": "..."}, ...]
-    weather_context: Optional string containing current weather info
+    Sends the full conversation history to Gemini.
+    stream: If True, returns a generator for streaming responses.
     """
+    # Verify input
+    if not messages_history: return "Hello! How can I help you?"
+
     # Convert Streamlit roles to Gemini roles
-    # Streamlit: "user", "assistant"
-    # Gemini: "user", "model"
     gemini_history = []
     
-    # Process all messages except the last one (which is the new prompt)
-    for msg in messages_history[:-1]:
+    # Process messages, limit to last 20 to improve speed
+    recent_messages = messages_history[-20:] if len(messages_history) > 20 else messages_history
+    
+    # Process all messages except the last one
+    for msg in recent_messages[:-1]:
         role = "user" if msg["role"] == "user" else "model"
         gemini_history.append({"role": role, "parts": [msg["content"]]})
     
-    # Start a chat session with history
+    # Start chat
     chat = model.start_chat(history=gemini_history)
     
-    # Send the last message (current user prompt)
-    last_message = messages_history[-1]["content"]
+    # Last message
+    last_message = recent_messages[-1]["content"]
     
     if weather_context:
-        # Prepend weather context to the user's message
         last_message = f"[System Context: {weather_context}]\n\n{last_message}"
         
-    response = chat.send_message(last_message)
+    response = chat.send_message(last_message, stream=stream)
     
-    return response.text.strip()
+    if stream:
+        return (chunk.text for chunk in response)
+    else:
+        return response.text.strip()
 
 
 def analyze_plant_image(image_path, conversation_history=None):
