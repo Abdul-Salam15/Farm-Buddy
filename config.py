@@ -1,0 +1,4 @@
+import os
+
+GEMINI_API_KEY = 'AIzaSyDNEZEk6OQRdmcgnjsQ1ljP8dW8LOMCBl8'
+os.environ["GEMINI_API_KEY"] = GEMINI_API_KEY

@@ -1,0 +1,10 @@
+streamlit
+google-generativeai
+streamlit-webrtc
+numpy
+OpenAI-Whisper
+soundfile
+pydub
+av
+aiortc
+python-dotenv
