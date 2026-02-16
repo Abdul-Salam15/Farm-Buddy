@@ -8,3 +8,6 @@ pydub
 av
 aiortc
 python-dotenv
+python-telegram-bot
+SpeechRecognition
+requests
