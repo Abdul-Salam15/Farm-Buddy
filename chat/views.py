@@ -67,6 +67,7 @@ def send_message(request):
     try:
         data = json.loads(request.body)
         user_message = data.get('message', '').strip()
+        language = data.get('language', 'en')
         
         if not user_message:
             return JsonResponse({'success': False, 'error': 'Empty message'})
@@ -82,38 +83,55 @@ def send_message(request):
             content=user_message
         )
         
+        from django.http import StreamingHttpResponse
+
         # Get conversation history for context
         messages_history = list(conversation.messages.all().values('role', 'content'))
         
-        # Get AI response
-        try:
-            weather_context = request.session.get('weather_context')
-            ai_response = ask_gemini(messages_history, weather_context=weather_context)
-        except Exception as e:
-            print(f"Gemini API Error: {str(e)}")
-            ai_response = "I'm sorry, I'm having trouble connecting right now. Please try again."
-        
-        # Save AI response
-        Message.objects.create(
-            conversation=conversation,
-            role='assistant',
-            content=ai_response
-        )
-        
-        # Update conversation title if it's the first message
-        if conversation.messages.count() == 2:  # user + assistant
+        # Generator for streaming response
+        def response_generator():
+            full_response = ""
             try:
-                from utils.gemini_api import summarize_title
-                conversation.title = summarize_title(user_message)
-            except Exception:
-                # Fallback
-                conversation.title = user_message[:30] + '...'
-            conversation.save()
-        
-        return JsonResponse({
-            'success': True,
-            'response': ai_response
-        })
+                weather_context = request.session.get('weather_context')
+                # Request streaming from Gemini
+                stream = ask_gemini(messages_history, weather_context=weather_context, stream=True, language=language)
+                
+                for chunk in stream:
+                    full_response += chunk
+                    # Yield chunk as JSON line (NDJSON style or simple data)
+                    yield json.dumps({'chunk': chunk}) + "\n"
+                
+                # Save full response to DB after streaming is complete
+                Message.objects.create(
+                    conversation=conversation,
+                    role='assistant',
+                    content=full_response
+                )
+                
+                # Signal completion
+                yield json.dumps({'success': True, 'full_text': full_response}) + "\n"
+                
+                # Update title in background if needed (logic moved here to run after response)
+                if conversation.messages.count() == 2:
+                     def update_title_background(conv_id, text):
+                        try:
+                            from utils.gemini_api import summarize_title
+                            c = Conversation.objects.get(id=conv_id)
+                            c.title = summarize_title(text)
+                            c.save()
+                        except Exception as e:
+                            print(f"Error updating title: {e}")
+
+                     import threading
+                     thread = threading.Thread(target=update_title_background, args=(conversation.id, user_message))
+                     thread.daemon = True
+                     thread.start()
+
+            except Exception as e:
+                print(f"Stream Error: {e}")
+                yield json.dumps({'error': str(e)}) + "\n"
+
+        return StreamingHttpResponse(response_generator(), content_type='application/x-ndjson')
         
     except Exception as e:
         print(f"Error in send_message: {str(e)}")
@@ -268,4 +286,86 @@ def get_weather_data(request):
             'data': {'current': weather_data, 'forecast': forecast_data}
         })
     except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@require_http_methods(["POST"])
+def transcribe_audio(request):
+    """Transcribe audio using Gemini"""
+    try:
+        from utils.gemini_api import analyze_plant_image # Reuse analyzing logic structure
+        import google.generativeai as genai
+        
+        if 'audio' not in request.FILES:
+            return JsonResponse({'success': False, 'error': 'No audio provided'}, status=400)
+            
+        audio_file = request.FILES['audio']
+        language = request.POST.get('language', 'en')
+        
+        # Save temp file
+        temp_path = f"temp_{audio_file.name}"
+        with open(temp_path, 'wb+') as destination:
+            for chunk in audio_file.chunks():
+                destination.write(chunk)
+                
+        try:
+            # Upload to Gemini
+            myfile = genai.upload_file(temp_path)
+            model = genai.GenerativeModel("gemini-1.5-flash")
+            
+            prompt = f"Transcribe this audio exactly as spoken. The language is likely {language} (Hausa/Igbo/Yoruba/English). Return ONLY the transcription text, no other commentary."
+            
+            result = model.generate_content([myfile, prompt])
+            transcription = result.text.strip()
+            
+            # Cleanup
+            os.remove(temp_path)
+            
+            return JsonResponse({'success': True, 'text': transcription})
+            
+        except Exception as ignored:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+            raise ignored
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@require_http_methods(["POST"])
+def speak_text(request):
+    """Convert text to speech using gTTS"""
+    try:
+        from gtts import gTTS
+        from django.http import HttpResponse
+        import io
+        
+        data = json.loads(request.body)
+        text = data.get('text', '').strip()
+        language = data.get('language', 'en')
+        
+        if not text:
+            return JsonResponse({'success': False, 'error': 'No text provided'}, status=400)
+        
+        # Map to gTTS codes (ha, ig, yo are supported)
+        # Fallback to English if not supported
+        lang_code = language if language in ['en', 'ha', 'ig', 'yo'] else 'en'
+        
+        # Clean text (remove markdown asterisks etc)
+        clean_text = text.replace('*', '').replace('#', '')
+        
+        # Generate audio
+        tts = gTTS(text=clean_text, lang=lang_code, slow=False)
+        
+        # Save to memory buffer
+        mp3_fp = io.BytesIO()
+        tts.write_to_fp(mp3_fp)
+        mp3_fp.seek(0)
+        
+        response = HttpResponse(mp3_fp.read(), content_type='audio/mpeg')
+        response['Content-Disposition'] = 'inline; filename="response.mp3"'
+        return response
+        
+    except Exception as e:
+        print(f"TTS Error: {e}")
         return JsonResponse({'success': False, 'error': str(e)}, status=500)

@@ -4,6 +4,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Force reload triggers
+
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 # System instruction for the persona
@@ -20,13 +22,23 @@ model = genai.GenerativeModel(
     system_instruction=SYSTEM_INSTRUCTION
 )
 
-def ask_gemini(messages_history: list, weather_context=None, stream=False):
+def ask_gemini(messages_history: list, weather_context=None, stream=False, language='en'):
     """
     Sends the full conversation history to Gemini.
     stream: If True, returns a generator for streaming responses.
+    language: Target language for the response ('en', 'ha', 'ig', 'yo').
     """
     # Verify input
     if not messages_history: return "Hello! How can I help you?"
+
+    # Language instruction mapping
+    lang_instructions = {
+        'en': "Answer in English.",
+        'ha': "Answer in Hausa language (Harshen Hausa).",
+        'ig': "Answer in Igbo language (Asụsụ Igbo).",
+        'yo': "Answer in Yoruba language (Èdè Yorùbá)."
+    }
+    lang_instruction = lang_instructions.get(language, "Answer in English.")
 
     # Convert Streamlit roles to Gemini roles
     gemini_history = []
@@ -45,15 +57,36 @@ def ask_gemini(messages_history: list, weather_context=None, stream=False):
     # Last message
     last_message = recent_messages[-1]["content"]
     
+    # Add current date to context to prevent hallucinations
+    from datetime import datetime
+    current_date = datetime.now().strftime("%A, %B %d, %Y")
+    
+    system_context = f"Current Date: {current_date}\nIMPORTANT INSTRUCTION: {lang_instruction}"
+    
     if weather_context:
-        last_message = f"[System Context: {weather_context}]\n\n{last_message}"
+        system_context += f"\nWeather Info: {weather_context}"
+        
+    last_message = f"[System Context: {system_context}]\n\n{last_message}"
         
     response = chat.send_message(last_message, stream=stream)
     
     if stream:
-        return (chunk.text for chunk in response)
+        def stream_generator():
+            try:
+                for chunk in response:
+                    if chunk.text:
+                        yield chunk.text
+            except Exception as e:
+                # In case of safety filters or other errors during iteration
+                print(f"Error during streaming: {e}")
+                yield " [Error: Interrupted] "
+        return stream_generator()
     else:
-        return response.text.strip()
+        try:
+            return response.text.strip()
+        except ValueError:
+            # Handle cases where response might be blocked
+            return "I'm sorry, I cannot answer that request due to safety guidelines."
 
 
 def analyze_plant_image(image_path, conversation_history=None):

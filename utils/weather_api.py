@@ -159,7 +159,12 @@ def format_forecast_for_ai(forecast_data):
             if avg_rain_prob > 0.3:
                 rain_note = f" (Rain chance: {int(avg_rain_prob * 100)}%)"
             
-            summary_lines.append(f"- {date}: {most_common_desc}, {int(min_temp)}°C-{int(max_temp)}°C{rain_note}")
+            # Convert date_str to day name
+            from datetime import datetime
+            dt = datetime.strptime(date, "%Y-%m-%d")
+            day_name = dt.strftime("%A")
+            
+            summary_lines.append(f"- {day_name} ({date}): {most_common_desc}, {int(min_temp)}°C-{int(max_temp)}°C{rain_note}")
             
         return "Upcoming Forecast:\n" + "\n".join(summary_lines)
     except Exception as e:

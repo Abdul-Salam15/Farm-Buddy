@@ -1,13 +1,8 @@
-streamlit
-google-generativeai
-streamlit-webrtc
-numpy
-OpenAI-Whisper
-soundfile
-pydub
-av
-aiortc
+django>=6.0
 python-dotenv
+google-generativeai
 python-telegram-bot
 SpeechRecognition
+pydub
 requests
+gTTS

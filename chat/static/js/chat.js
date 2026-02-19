@@ -16,23 +16,490 @@ function getCookie(name) {
 
 const csrftoken = getCookie('csrftoken');
 
-// ========== VOICE FUNCTIONALITY ==========
+// ========== LANGUAGE SUPPORT ==========
+const translations = {
+    'en': {
+        'subtitle': 'Type or speak your questions • Phase 3: Voice-Enabled',
+        'placeholder': 'Type, speak, or upload an image...',
+        'newChat': '+ New Chat',
+        'listening': 'Listening... (click mic to stop)',
+        'welcome': 'Welcome to FarmBuddy! 🌾',
+        'intro': "I'm your AI agricultural advisor for Nigerian smallholder farmers.",
+        'topics': 'Ask me anything about:',
+        'topic1': '🌱 Crop planting and management',
+        'topic2': '🐛 Pest control',
+        'topic3': '💧 Irrigation and soil health',
+        'topic4': '📊 Farming best practices'
+    },
+    'ha': {
+        'subtitle': 'Rubuta ko kayi magana • Mataki na 3: Voice-Enabled',
+        'placeholder': 'Rubuta, yi magana, ko ɗauki hoto...',
+        'newChat': '+ Sabuwar Tattaunawa',
+        'listening': 'Ina sauraro... (danna mic don tsayawa)',
+        'welcome': 'Barka da zuwa FarmBuddy! 🌾',
+        'intro': 'Ni ne mai ba ku shawara kan harkar noma don manoman Najeriya.',
+        'topics': 'Tambaye ni komai game da:',
+        'topic1': '🌱 Shuka da kula da amfanin gona',
+        'topic2': '🐛 Kula da kwari',
+        'topic3': '💧 Ban ruwa da lafiyar kasa',
+        'topic4': '📊 Mafi kyawun hanyoyin noma'
+    },
+    'ig': {
+        'subtitle': 'Dee ma ọ bụ kwuo okwu • Agba nke 3: Voice-Enabled',
+        'placeholder': 'Dee, kwuo, ma ọ bụ tinye foto...',
+        'newChat': '+ Nkata Ọhụrụ',
+        'listening': 'Ana m ege ntị... (pịa mic ka ị kwụsị)',
+        'welcome': 'Nnọọ na FarmBuddy! 🌾',
+        'intro': 'Abụ m onye ndụmọdụ ọrụ ugbo gị maka ndị ọrụ ugbo na Naijiria.',
+        'topics': 'Jụọ m ihe ọ bụla gbasara:',
+        'topic1': '🌱 Ịkụ ihe ọkụkụ na njikwa',
+        'topic2': '🐛 Nchịkwa ụmụ ahụhụ',
+        'topic3': '💧 Ịgbara mmiri na ahụike ala',
+        'topic4': '📊 Ụzọ kachasị mma maka ọrụ ugbo'
+    },
+    'yo': {
+        'subtitle': 'Tẹ tabi sọrọ • Ipele 3: Voice-Enabled',
+        'placeholder': 'Tẹ, sọrọ, tabi gbe aworan si...',
+        'newChat': '+ Ifọrọwerọ Titun',
+        'listening': 'Mo n tẹtisi... (tẹ mic lati da duro)',
+        'welcome': 'Kaabo si FarmBuddy! 🌾',
+        'intro': 'Emi ni olugbamoran iṣẹ-ogbin AI rẹ fun awọn agbe kekere ni Nigeria.',
+        'topics': 'Beere ohunkohun nipa:',
+        'topic1': '🌱 Gbingbin ati itọju irugbin',
+        'topic2': '🐛 Iṣakoso kokoro',
+        'topic3': '💧 Imudani omi ati ilera ile',
+        'topic4': '📊 Awọn iṣe ti o dara julọ ninu iṣẹ-ogbin'
+    }
+};
+
+let currentLanguage = localStorage.getItem('language') || 'en';
+
+function updateLanguage(lang) {
+    currentLanguage = lang;
+    localStorage.setItem('language', lang);
+
+    // Update Dropdown
+    const langSelect = document.getElementById('languageSelect');
+    if (langSelect) langSelect.value = lang;
+
+    const t = translations[lang];
+    if (!t) return;
+
+    // Update static elements
+    const subtitle = document.querySelector('.subtitle');
+    if (subtitle) subtitle.textContent = t.subtitle;
+
+    const userInput = document.getElementById('userInput');
+    if (userInput) userInput.placeholder = t.placeholder;
+
+    const newChatBtn = document.getElementById('newChatBtn');
+    if (newChatBtn) newChatBtn.textContent = t.newChat;
+
+    const recordingText = document.querySelector('#recordingIndicator span');
+    if (recordingText) recordingText.textContent = t.listening;
+
+    // Update welcome message if present
+    const welcomeTitle = document.querySelector('.welcome-message h2');
+    if (welcomeTitle) welcomeTitle.textContent = t.welcome;
+
+    const welcomeIntro = document.querySelector('.welcome-message p:nth-of-type(1)');
+    if (welcomeIntro) welcomeIntro.textContent = t.intro;
+
+    const welcomeTopics = document.querySelector('.welcome-message p:nth-of-type(2)');
+    if (welcomeTopics) welcomeTopics.textContent = t.topics;
+
+    const listing = document.querySelectorAll('.welcome-message li');
+    if (listing.length >= 4) {
+        listing[0].textContent = t.topic1;
+        listing[1].textContent = t.topic2;
+        listing[2].textContent = t.topic3;
+        listing[3].textContent = t.topic4;
+    }
+}
+
+// ========== MAIN INITIALIZATION ==========
+document.addEventListener('DOMContentLoaded', function () {
+    console.log("FarmBuddy Chat Initializing...");
+
+    // 1. Language Init
+    updateLanguage(currentLanguage);
+    const langSelect = document.getElementById('languageSelect');
+    if (langSelect) {
+        langSelect.addEventListener('change', function () {
+            updateLanguage(this.value);
+        });
+    }
+
+    // 2. DOM Elements
+    const chatForm = document.getElementById('chatForm');
+    const userInput = document.getElementById('userInput');
+    const messagesContainer = document.getElementById('messagesContainer');
+    const sendBtn = document.getElementById('sendBtn');
+    const newChatBtn = document.getElementById('newChatBtn');
+    const imageInput = document.getElementById('imageInput');
+    const imageBtn = document.getElementById('imageBtn');
+    const locationBtn = document.getElementById('locationBtn');
+    const themeToggle = document.getElementById('themeToggle');
+    const sunIcon = themeToggle ? themeToggle.querySelector('.sun-icon') : null;
+    const moonIcon = themeToggle ? themeToggle.querySelector('.moon-icon') : null;
+
+    // 3. Location Handling
+    if (locationBtn) {
+        locationBtn.addEventListener('click', function () {
+            if (!navigator.geolocation) {
+                alert('Geolocation is not supported by your browser');
+                return;
+            }
+
+            this.classList.add('loading');
+
+            navigator.geolocation.getCurrentPosition(
+                async (position) => {
+                    try {
+                        const response = await fetch('/chat/api/weather/', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': csrftoken
+                            },
+                            body: JSON.stringify({
+                                lat: position.coords.latitude,
+                                lon: position.coords.longitude
+                            })
+                        });
+
+                        const data = await response.json();
+
+                        if (data.success) {
+                            addMessage('system', `📍 ${data.report}`);
+                        } else {
+                            alert('Error fetching weather: ' + (data.error || 'Unknown error'));
+                        }
+                    } catch (err) {
+                        console.error('Weather error:', err);
+                        alert('Failed to connect to weather service');
+                    } finally {
+                        this.classList.remove('loading');
+                    }
+                },
+                (error) => {
+                    this.classList.remove('loading');
+                    let msg = 'Error getting location';
+                    switch (error.code) {
+                        case error.PERMISSION_DENIED: msg = 'Location permission denied'; break;
+                        case error.POSITION_UNAVAILABLE: msg = 'Location unavailable'; break;
+                        case error.TIMEOUT: msg = 'Location request timed out'; break;
+                    }
+                    alert(msg);
+                }
+            );
+        });
+    }
+
+    // 4. Theme Handling 
+    const currentTheme = localStorage.getItem('theme');
+    if (currentTheme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        if (sunIcon) sunIcon.style.display = 'block';
+        if (moonIcon) moonIcon.style.display = 'none';
+    }
+
+    if (themeToggle) {
+        themeToggle.addEventListener('click', function () {
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+
+            if (isDark) {
+                document.documentElement.removeAttribute('data-theme');
+                localStorage.setItem('theme', 'light');
+                if (sunIcon) sunIcon.style.display = 'none';
+                if (moonIcon) moonIcon.style.display = 'block';
+            } else {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                localStorage.setItem('theme', 'dark');
+                if (sunIcon) sunIcon.style.display = 'block';
+                if (moonIcon) moonIcon.style.display = 'none';
+            }
+        });
+    }
+
+    // 5. Image Handling
+    let currentImage = null;
+    let imagePreviewDiv = null;
+
+    if (imageBtn && imageInput) {
+        imageBtn.addEventListener('click', function () {
+            imageInput.click();
+        });
+
+        imageInput.addEventListener('change', function (e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            if (!file.type.startsWith('image/')) {
+                alert('Please select an image file');
+                return;
+            }
+
+            if (file.size > 5 * 1024 * 1024) {
+                alert('Image too large. Maximum size is 5MB');
+                return;
+            }
+
+            currentImage = file;
+            showImagePreview(file);
+        });
+    }
+
+    function showImagePreview(file) {
+        if (imagePreviewDiv) {
+            imagePreviewDiv.remove();
+        }
+
+        const reader = new FileReader();
+        reader.onload = function (e) {
+            imagePreviewDiv = document.createElement('div');
+            imagePreviewDiv.className = 'image-preview-container';
+            imagePreviewDiv.innerHTML = `
+                <img src="${e.target.result}" class="image-preview" alt="Preview">
+                <button class="remove-image-btn" id="removeImageBtn">×</button>
+            `;
+
+            chatForm.parentNode.insertBefore(imagePreviewDiv, chatForm);
+
+            // Add event listener to the dynamic button
+            document.getElementById('removeImageBtn').addEventListener('click', function (e) {
+                e.preventDefault(); // Prevent form submission
+                removeImagePreview();
+            });
+        };
+        reader.readAsDataURL(file);
+    }
+
+    window.removeImagePreview = function () {
+        if (imagePreviewDiv) {
+            imagePreviewDiv.remove();
+            imagePreviewDiv = null;
+        }
+        currentImage = null;
+        if (imageInput) imageInput.value = '';
+    };
+
+    // 6. Auto-resize textarea
+    if (userInput) {
+        userInput.addEventListener('input', function () {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        });
+
+        userInput.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                chatForm.dispatchEvent(new Event('submit'));
+            }
+        });
+    }
+
+    // 7. Form Submission
+    if (chatForm) {
+        chatForm.addEventListener('submit', async function (e) {
+            e.preventDefault();
+            console.log("Form submitted");
+
+            const message = userInput.value.trim();
+
+            if (!message && !currentImage) return;
+
+            sendBtn.disabled = true;
+
+            try {
+                let response;
+
+                if (currentImage) {
+                    const previewUrl = URL.createObjectURL(currentImage);
+                    addMessage('user', message, previewUrl);
+                    showLoading();
+
+                    const formData = new FormData();
+                    formData.append('image', currentImage);
+                    formData.append('message', message);
+
+                    userInput.value = '';
+                    userInput.style.height = 'auto';
+                    removeImagePreview();
+
+                    response = await fetch('/chat/upload/', {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': csrftoken
+                        },
+                        body: formData
+                    });
+                } else {
+                    addMessage('user', message);
+                    userInput.value = '';
+                    userInput.style.height = 'auto';
+                    showLoading();
+
+                    response = await fetch('/chat/send/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrftoken
+                        },
+                        body: JSON.stringify({
+                            message: message,
+                            language: currentLanguage
+                        })
+                    });
+
+                    // Streaming Logic
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+
+                    addMessage('assistant', '', null, false);
+                    const lastMessageDiv = messagesContainer.lastElementChild;
+                    const textDiv = lastMessageDiv.querySelector('.message-text');
+                    const contentDiv = lastMessageDiv.querySelector('.message-content');
+
+                    let fullText = "";
+                    let buffer = "";
+
+                    removeLoading();
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop() || "";
+
+                        for (const line of lines) {
+                            if (!line.trim()) continue;
+                            try {
+                                const data = JSON.parse(line);
+                                if (data.chunk) {
+                                    fullText += data.chunk;
+                                    if (typeof marked !== 'undefined') {
+                                        textDiv.innerHTML = marked.parse(fullText);
+                                    } else {
+                                        textDiv.textContent = fullText;
+                                    }
+                                    scrollToBottom();
+                                } else if (data.error) {
+                                    textDiv.textContent += "\n[Error: " + data.error + "]";
+                                } else if (data.full_text) {
+                                    fullText = data.full_text;
+                                }
+                            } catch (e) {
+                                console.error("Error parsing stream chunk:", e);
+                            }
+                        }
+                    }
+                    addSpeakerButton(contentDiv, fullText);
+                }
+
+                if (response && !response.ok && !response.body) {
+                    // Handle non-streaming errors if any
+                    const errData = await response.json();
+                    throw new Error(errData.error || 'Request failed');
+                }
+
+            } catch (error) {
+                removeLoading();
+                addMessage('assistant', 'Sorry, there was a connection error: ' + error.message);
+                console.error('Error:', error);
+            } finally {
+                sendBtn.disabled = false;
+                if (userInput) userInput.focus();
+            }
+        });
+    }
+
+    // 8. New Chat
+    if (newChatBtn) {
+        newChatBtn.addEventListener('click', async function () {
+            try {
+                const response = await fetch('/chat/new/', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrftoken
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        window.location.href = `/chat/${data.conversation_id}/`;
+                    } else {
+                        window.location.reload();
+                    }
+                }
+            } catch (error) {
+                console.error('Error creating new chat:', error);
+            }
+        });
+    }
+
+    // 9. Voice Controls
+    const micBtn = document.getElementById('micBtn');
+    if (micBtn) {
+        micBtn.addEventListener('click', function () {
+            if (!supportsVoice) {
+                alert('Speech recognition is not supported in your browser.');
+                return;
+            }
+
+            if (isRecording) {
+                stopRecording();
+            } else {
+                try {
+                    if (recognition) {
+                        recognition.start();
+                    } else {
+                        console.error("Recognition not initialized");
+                    }
+                } catch (error) {
+                    console.error('Error starting recognition:', error);
+                }
+            }
+        });
+    }
+
+    // 10. Initial Render
+    if (typeof marked !== 'undefined') {
+        document.querySelectorAll('.message').forEach(msgDiv => {
+            const textDiv = msgDiv.querySelector('.message-text');
+            const contentDiv = msgDiv.querySelector('.message-content');
+
+            if (textDiv && !textDiv.dataset.rendered) {
+                const rawText = textDiv.textContent.trim();
+                textDiv.innerHTML = marked.parse(rawText);
+                textDiv.dataset.rendered = 'true';
+
+                if (msgDiv.classList.contains('assistant') && supportsTTS) {
+                    addSpeakerButton(contentDiv, rawText);
+                }
+            }
+        });
+    }
+    scrollToBottom();
+
+}); // End DOMContentLoaded
+
+
+// ========== HELPER FUNCTIONS (Outside Init) ==========
 
 // Voice state
 let isRecording = false;
 let recognition = null;
-let synthesis = window.speechSynthesis;
-let currentUtterance = null;
-
-// Check browser support
-const supportsVoice = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
+const supportsVoice = 'SpeechRecognition' in window || 'webkitSpeechRecognition' in window;
 const supportsTTS = 'speechSynthesis' in window;
 
-// Initialize Speech Recognition
 if (supportsVoice) {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     recognition = new SpeechRecognition();
-    recognition.continuous = true;  // Changed to continuous
+    recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = 'en-US';
 
@@ -41,15 +508,14 @@ if (supportsVoice) {
     recognition.onstart = function () {
         const micBtn = document.getElementById('micBtn');
         const recordingIndicator = document.getElementById('recordingIndicator');
-        micBtn.classList.add('recording');
-        recordingIndicator.style.display = 'flex';
+        if (micBtn) micBtn.classList.add('recording');
+        if (recordingIndicator) recordingIndicator.style.display = 'flex';
         isRecording = true;
         finalTranscript = '';
     };
 
     recognition.onresult = function (event) {
         let interimTranscript = '';
-
         for (let i = event.resultIndex; i < event.results.length; i++) {
             const transcript = event.results[i][0].transcript;
             if (event.results[i].isFinal) {
@@ -58,22 +524,20 @@ if (supportsVoice) {
                 interimTranscript += transcript;
             }
         }
-
-        userInput.value = finalTranscript + interimTranscript;
-        userInput.dispatchEvent(new Event('input')); // Trigger auto-resize
+        const userInput = document.getElementById('userInput');
+        if (userInput) {
+            userInput.value = finalTranscript + interimTranscript;
+            userInput.dispatchEvent(new Event('input'));
+        }
     };
 
     recognition.onerror = function (event) {
         console.error('Speech recognition error:', event.error);
-        if (event.error !== 'no-speech' && event.error !== 'aborted') {
-            alert('Speech recognition error: ' + event.error);
-        }
         stopRecording();
     };
 
     recognition.onend = function () {
         if (isRecording) {
-            // Auto-restart if still recording (unless manually stopped)
             try {
                 recognition.start();
             } catch (e) {
@@ -86,111 +550,25 @@ if (supportsVoice) {
 function stopRecording() {
     const micBtn = document.getElementById('micBtn');
     const recordingIndicator = document.getElementById('recordingIndicator');
-    micBtn.classList.remove('recording');
-    recordingIndicator.style.display = 'none';
+    if (micBtn) micBtn.classList.remove('recording');
+    if (recordingIndicator) recordingIndicator.style.display = 'none';
     isRecording = false;
     if (recognition) {
         recognition.stop();
     }
 }
 
-// DOM Elements
-const chatForm = document.getElementById('chatForm');
-const userInput = document.getElementById('userInput');
-const messagesContainer = document.getElementById('messagesContainer');
-const sendBtn = document.getElementById('sendBtn');
-const newChatBtn = document.getElementById('newChatBtn');
-const imageInput = document.getElementById('imageInput');
-const imageBtn = document.getElementById('imageBtn');
-
-// Image upload state
-let currentImage = null;
-let imagePreviewDiv = null;
-
-// Image button click - trigger file input
-if (imageBtn && imageInput) {
-    imageBtn.addEventListener('click', function () {
-        imageInput.click();
-    });
-
-    // Handle image selection
-    imageInput.addEventListener('change', async function (e) {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        // Validate file type
-        if (!file.type.startsWith('image/')) {
-            alert('Please select an image file');
-            return;
-        }
-
-        // Validate file size (5MB max)
-        if (file.size > 5 * 1024 * 1024) {
-            alert('Image too large. Maximum size is 5MB');
-            return;
-        }
-
-        // Store the file
-        currentImage = file;
-
-        // Create image preview
-        showImagePreview(file);
-    });
-}
-
-// Show image preview before upload
-function showImagePreview(file) {
-    // Remove existing preview if any
-    if (imagePreviewDiv) {
-        imagePreviewDiv.remove();
-    }
-
-    const reader = new FileReader();
-    reader.onload = function (e) {
-        imagePreviewDiv = document.createElement('div');
-        imagePreviewDiv.className = 'image-preview-container';
-        imagePreviewDiv.innerHTML = `
-            <img src="${e.target.result}" class="image-preview" alt="Preview">
-            <button class="remove-image-btn" onclick="removeImagePreview()">×</button>
-        `;
-
-        // Insert before the form
-        chatForm.parentNode.insertBefore(imagePreviewDiv, chatForm);
-    };
-    reader.readAsDataURL(file);
-}
-
-// Remove image preview
-window.removeImagePreview = function () {
-    if (imagePreviewDiv) {
-        imagePreviewDiv.remove();
-        imagePreviewDiv = null;
-    }
-    currentImage = null;
-    imageInput.value = '';
-};
-
-// Auto-resize textarea
-userInput.addEventListener('input', function () {
-    this.style.height = 'auto';
-    this.style.height = (this.scrollHeight) + 'px';
-});
-
-// Handle Enter key (Shift+Enter for newline, Enter to send)
-userInput.addEventListener('keydown', function (e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        chatForm.dispatchEvent(new Event('submit'));
-    }
-});
-
-// Scroll to bottom of messages
 function scrollToBottom() {
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    const messagesContainer = document.getElementById('messagesContainer');
+    if (messagesContainer) {
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
 }
 
-// Add message to UI
 function addMessage(role, content, imageUrl = null, animate = false) {
+    const messagesContainer = document.getElementById('messagesContainer');
+    if (!messagesContainer) return;
+
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}`;
 
@@ -204,7 +582,6 @@ function addMessage(role, content, imageUrl = null, animate = false) {
     const textDiv = document.createElement('div');
     textDiv.className = 'message-text';
 
-    // Add image if provided
     if (imageUrl) {
         const img = document.createElement('img');
         img.src = imageUrl;
@@ -215,16 +592,13 @@ function addMessage(role, content, imageUrl = null, animate = false) {
         contentDiv.appendChild(img);
     }
 
-    // Render content
     if (role === 'assistant' && animate) {
-        // Typewriter effect for assistant
         let i = 0;
-        const speed = 10; // ms per char
+        const speed = 10;
 
         function typeWriter() {
             if (i < content.length) {
-                // Determine a chunk to add (to speed up rendering of long text)
-                const chunk = content.slice(0, i + 3); // Add 3 chars at a time
+                const chunk = content.slice(0, i + 3);
                 if (typeof marked !== 'undefined') {
                     textDiv.classList.remove('raw-text');
                     textDiv.innerHTML = marked.parse(chunk);
@@ -238,21 +612,17 @@ function addMessage(role, content, imageUrl = null, animate = false) {
             } else {
                 if (typeof marked !== 'undefined') {
                     textDiv.classList.remove('raw-text');
-                    textDiv.innerHTML = marked.parse(content); // Final render
+                    textDiv.innerHTML = marked.parse(content);
                 } else {
                     textDiv.classList.add('raw-text');
-                    textDiv.textContent = content; // Fallback
+                    textDiv.textContent = content;
                 }
                 scrollToBottom();
-
-                // Add speaker button after typing is done. Use innerText for clean reading.
                 addSpeakerButton(contentDiv, textDiv.innerText);
             }
         }
         typeWriter();
     } else {
-        // Instant render for user or history
-        // Check if marked is available (it might fail if loaded too late)
         if (typeof marked !== 'undefined') {
             textDiv.innerHTML = marked.parse(content);
         } else {
@@ -261,7 +631,6 @@ function addMessage(role, content, imageUrl = null, animate = false) {
         }
 
         if (role === 'assistant') {
-            // Use innerText for clean reading
             addSpeakerButton(contentDiv, textDiv.innerText);
         }
     }
@@ -293,8 +662,10 @@ function addSpeakerButton(container, text) {
     container.appendChild(speakerBtn);
 }
 
-// Show loading indicator
 function showLoading() {
+    const messagesContainer = document.getElementById('messagesContainer');
+    if (!messagesContainer) return;
+
     const loadingDiv = document.createElement('div');
     loadingDiv.className = 'message assistant loading-message';
     loadingDiv.id = 'loadingIndicator';
@@ -318,7 +689,6 @@ function showLoading() {
     scrollToBottom();
 }
 
-// Remove loading indicator
 function removeLoading() {
     const loadingIndicator = document.getElementById('loadingIndicator');
     if (loadingIndicator) {
@@ -326,200 +696,42 @@ function removeLoading() {
     }
 }
 
-// Handle form submission
-chatForm.addEventListener('submit', async function (e) {
-    e.preventDefault();
-
-    const message = userInput.value.trim();
-
-    // Check if we have an image or message
-    if (!message && !currentImage) return;
-
-    // Disable send button
-    sendBtn.disabled = true;
-
-    try {
-        let response;
-
-        if (currentImage) {
-            // Handle image upload
-
-            // Create preview URL for immediate display
-            const previewUrl = URL.createObjectURL(currentImage);
-            addMessage('user', message, previewUrl);
-            showLoading(); // Show loading AFTER user message
-
-            const formData = new FormData();
-            formData.append('image', currentImage);
-            formData.append('message', message);
-
-            // Clear input and image state immediately
-            userInput.value = '';
-            userInput.style.height = 'auto';
-            removeImagePreview(); // This clears currentImage too
-
-            response = await fetch('/chat/upload/', {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': csrftoken
-                },
-                body: formData
-            });
-        } else {
-            // Handle text-only message
-            addMessage('user', message);
-
-            // Clear input
-            userInput.value = '';
-            userInput.style.height = 'auto';
-            showLoading(); // Show loading AFTER user message
-
-            response = await fetch('/chat/send/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrftoken
-                },
-                body: JSON.stringify({ message: message })
-            });
-        }
-
-
-        // Check if response is ok first
-        if (!response.ok) {
-            let errorText = await response.text();
-
-            // Try to parse JSON error from response
-            try {
-                const jsonError = JSON.parse(errorText);
-                errorText = jsonError.error || errorText;
-            } catch (e) {
-                // If not JSON, use the raw text (truncated if too long)
-                if (errorText.length > 200) {
-                    // Check for common HTML errors
-                    if (errorText.includes('<title>')) {
-                        const match = errorText.match(/<title>(.*?)<\/title>/);
-                        if (match) errorText = "Server Error: " + match[1];
-                        else errorText = "Server Error (HTML response)";
-                    } else {
-                        errorText = errorText.substring(0, 200) + "...";
-                    }
-                }
-            }
-            throw new Error(`Server returned ${response.status}: ${errorText}`);
-        }
-
-        const data = await response.json();
-
-        removeLoading();
-
-        if (data.success) {
-            // Add AI response to UI with animation
-            addMessage('assistant', data.response, null, true);
-        } else {
-            addMessage('assistant', 'Sorry, I encountered an error: ' + (data.error || 'Unknown error'));
-        }
-    } catch (error) {
-        removeLoading();
-        addMessage('assistant', 'Sorry, there was a connection error: ' + error.message);
-        console.error('Error:', error);
-    } finally {
-        sendBtn.disabled = false;
-        userInput.focus();
-    }
-});
-
-// New chat button
-newChatBtn.addEventListener('click', async function () {
-    try {
-        const response = await fetch('/chat/new/', {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': csrftoken
-            }
-        });
-
-        if (response.ok) {
-            const data = await response.json();
-            if (data.success) {
-                window.location.href = `/chat/${data.conversation_id}/`;
-            } else {
-                window.location.reload(); // Fallback
-            }
-        }
-    } catch (error) {
-        console.error('Error creating new chat:', error);
-    }
-});
-
-// ========== VOICE CONTROLS EVENT LISTENERS ==========
-
-// Microphone button - Toggle start/stop recording
-const micBtn = document.getElementById('micBtn');
-if (micBtn) {
-    micBtn.addEventListener('click', function () {
-        if (!supportsVoice) {
-            alert('Speech recognition is not supported in your browser. Please use Chrome or Edge.');
-            return;
-        }
-
-        if (isRecording) {
-            // Stop recording
-            stopRecording();
-        } else {
-            // Start recording
-            try {
-                recognition.start();
-            } catch (error) {
-                console.error('Error starting recognition:', error);
-            }
-        }
-    });
-}
-
-// Text-to-speech function for individual messages
 function speakMessage(text, button) {
     if (!supportsTTS) {
         alert('Text-to-speech is not supported in your browser.');
         return;
     }
 
-    // If this button is currently playing, stop it
     if (button.classList.contains('playing')) {
-        synthesis.cancel();
+        speechSynthesis.cancel();
         button.classList.remove('playing');
         button.querySelector('span').textContent = 'Listen';
         return;
     }
 
-    // If another message is speaking, stop it first
-    if (synthesis.speaking) {
-        synthesis.cancel();
-        // Remove playing class from all speaker buttons
+    if (speechSynthesis.speaking) {
+        speechSynthesis.cancel();
         document.querySelectorAll('.speaker-btn').forEach(btn => {
             btn.classList.remove('playing');
             btn.querySelector('span').textContent = 'Listen';
         });
     }
 
-    // Mark this button as playing
     button.classList.add('playing');
     button.querySelector('span').textContent = 'Stop';
 
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.9;  // Slightly slower for clarity
+    utterance.rate = 0.9;
     utterance.pitch = 1.0;
     utterance.volume = 1.0;
     utterance.lang = 'en-US';
 
-    // Get available voices and prefer English voice
-    const voices = synthesis.getVoices();
+    const voices = speechSynthesis.getVoices();
     const englishVoice = voices.find(voice => voice.lang.startsWith('en'));
     if (englishVoice) {
         utterance.voice = englishVoice;
     }
 
-    // Reset button when done
     utterance.onend = function () {
         button.classList.remove('playing');
         button.querySelector('span').textContent = 'Listen';
@@ -530,41 +742,15 @@ function speakMessage(text, button) {
         button.querySelector('span').textContent = 'Listen';
     };
 
-    synthesis.speak(utterance);
+    speechSynthesis.speak(utterance);
 }
-
-
-// Auto-scroll on page load and render Markdown history
-window.addEventListener('load', function () {
-    // Render Markdown for existing messages
-    if (typeof marked !== 'undefined') {
-        document.querySelectorAll('.message').forEach(msgDiv => {
-            const textDiv = msgDiv.querySelector('.message-text');
-            const contentDiv = msgDiv.querySelector('.message-content');
-
-            if (textDiv && !textDiv.dataset.rendered) {
-                const rawText = textDiv.textContent.trim();
-
-                // Render Markdown
-                textDiv.innerHTML = marked.parse(rawText);
-                textDiv.dataset.rendered = 'true';
-
-                // Add speaker button if assistant
-                if (msgDiv.classList.contains('assistant') && supportsTTS) {
-                    addSpeakerButton(contentDiv, rawText);
-                }
-            }
-        });
-    }
-    scrollToBottom();
-});
 
 // Rename chat
 window.renameConversation = async function (id, currentTitle) {
     const newTitle = prompt("Enter new name for this chat:", currentTitle);
     if (newTitle && newTitle.trim() !== "" && newTitle !== currentTitle) {
         try {
-            const response = await fetch(`/chat/rename/${id}/`, {
+            const response = await fetch(`/chat/api/rename/${id}/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -589,7 +775,7 @@ window.renameConversation = async function (id, currentTitle) {
 window.deleteConversation = async function (id) {
     if (confirm("Are you sure you want to delete this chat? This cannot be undone.")) {
         try {
-            const response = await fetch(`/chat/delete/${id}/`, {
+            const response = await fetch(`/chat/api/delete/${id}/`, {
                 method: 'POST', // or DELETE
                 headers: {
                     'X-CSRFToken': csrftoken
@@ -597,9 +783,7 @@ window.deleteConversation = async function (id) {
             });
 
             if (response.ok) {
-                // If we are on the deleted chat page, go to index
-                // Or just reload which is easiest
-                window.location.href = '/chat/';
+                window.location.reload();
             } else {
                 alert('Error deleting chat');
             }
@@ -610,94 +794,4 @@ window.deleteConversation = async function (id) {
     }
 };
 
-// Location Handling
-document.addEventListener('DOMContentLoaded', function () {
-    const locationBtn = document.getElementById('locationBtn');
-    if (locationBtn) {
-        locationBtn.addEventListener('click', function () {
-            if (!navigator.geolocation) {
-                alert('Geolocation is not supported by your browser');
-                return;
-            }
 
-            this.classList.add('loading');
-
-            navigator.geolocation.getCurrentPosition(
-                async (position) => {
-                    try {
-                        const response = await fetch('/chat/weather/', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-CSRFToken': csrftoken
-                            },
-                            body: JSON.stringify({
-                                lat: position.coords.latitude,
-                                lon: position.coords.longitude
-                            })
-                        });
-
-                        const data = await response.json();
-
-                        if (data.success) {
-                            // Add system message to UI
-                            addMessage('system', `📍 ${data.report}`);
-                        } else {
-                            alert('Error fetching weather: ' + (data.error || 'Unknown error'));
-                        }
-                    } catch (err) {
-                        console.error('Weather error:', err);
-                        alert('Failed to connect to weather service');
-                    } finally {
-                        this.classList.remove('loading');
-                    }
-                },
-                (error) => {
-                    this.classList.remove('loading');
-                    let msg = 'Error getting location';
-                    switch (error.code) {
-                        case error.PERMISSION_DENIED: msg = 'Location permission denied'; break;
-                        case error.POSITION_UNAVAILABLE: msg = 'Location unavailable'; break;
-                        case error.TIMEOUT: msg = 'Location request timed out'; break;
-                    }
-                    alert(msg);
-                }
-            );
-        });
-    }
-});
-
-// Theme Handling
-document.addEventListener('DOMContentLoaded', function () {
-    const themeToggle = document.getElementById('themeToggle');
-    const sunIcon = themeToggle ? themeToggle.querySelector('.sun-icon') : null;
-    const moonIcon = themeToggle ? themeToggle.querySelector('.moon-icon') : null;
-
-    // Check local storage
-    const currentTheme = localStorage.getItem('theme');
-    if (currentTheme === 'dark') {
-        document.documentElement.setAttribute('data-theme', 'dark');
-        if (sunIcon) sunIcon.style.display = 'block';
-        if (moonIcon) moonIcon.style.display = 'none';
-    }
-
-    if (themeToggle) {
-        themeToggle.addEventListener('click', function () {
-            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-
-            if (isDark) {
-                // Switch to Light
-                document.documentElement.removeAttribute('data-theme');
-                localStorage.setItem('theme', 'light');
-                if (sunIcon) sunIcon.style.display = 'none';
-                if (moonIcon) moonIcon.style.display = 'block';
-            } else {
-                // Switch to Dark
-                document.documentElement.setAttribute('data-theme', 'dark');
-                localStorage.setItem('theme', 'dark');
-                if (sunIcon) sunIcon.style.display = 'block';
-                if (moonIcon) moonIcon.style.display = 'none';
-            }
-        });
-    }
-});
