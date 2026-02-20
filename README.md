@@ -1,98 +1,108 @@
 # FarmBuddy 🌾
+**Your Intelligent Multi-modal Agricultural Advisor**
 
-**AI-Powered Multimodal Agricultural Companion for Smallholder Farmers**
+FarmBuddy is a state-of-the-art AI platform designed to empower smallholder farmers with real-time, context-aware agricultural guidance. It bridges the literacy and technology gap through multi-modal interaction—voice, text, and vision—delivered via a mobile-first web interface.
 
-## 📖 Overview
+---
 
-FarmBuddy is an intelligent advisory platform designed to assist smallholder farmers in Nigeria (and beyond) by providing real-time, context-aware agricultural advice. It bridges the gap between complex agricultural data and farmers through accessible interfaces like voice interaction and image analysis.
+## ✨ Core Functionalities
 
-The system leverages **Google's Gemini AI** for reasoning and **OpenWeatherMap** for localized weather data to offer personalized recommendations.
+### 🗣️ Multi-modal Chat (Voice & Text)
+- **Interactive Advice**: Ask questions about crop management, pest control, and planting schedules.
+- **Voice Support**: High-quality Text-to-Speech (TTS) and Speech-to-Text (STT) for hands-free operation.
+- **Native Languages**: Supports **Hausa**, **Yoruba**, and **Igbo** (plus English) using Meta's MMS (Massively Multilingual Speech) models.
+- **Stop Control**: Take control of the audio with the new "Stop" feature to silence the AI during playback.
 
-## ✨ Key Features
+### 📸 Plant Disease Diagnosis (Vision-AI)
+- **Image Analysis**: Upload photos of plant leaves for instant disease detection.
+- **Streaming Vision**: Results start appearing word-by-word as the AI analyzes the image, reducing wait times.
+- **Actionable Treatment**: Get practical, low-cost solutions tailored for local farming conditions.
 
-*   **🤖 AI Chat Assistant:** Interactive chat for advice on crop management, pest control, and market trends.
-*   **🗣️ Voice Interaction:** Speech-to-Text (STT) and Text-to-Speech (TTS) capabilities for hands-free operation and accessibility for illiterate users.
-*   **📸 Plant Disease Detection:** Analyze plant images to detect diseases and receive treatment recommendations using AI vision.
-*   **🌦️ Weather Integration:** Real-time weather updates and 5-day forecasts to inform planting and harvesting decisions.
-*   **🌓 Dark Mode:** Eye-friendly optional dark theme for low-light conditions.
-*   **📱 Responsive Design:** Optimized for mobile devices and low-bandwidth connections.
+### 🌦️ Localized Weather Insights
+- **Real-time Data**: Integrated with OpenWeatherMap for current conditions and 5-day forecasts.
+- **Contextual Planning**: The AI uses weather data to provide smarter advice (e.g., advising against fertilizer application if heavy rain is expected).
+
+### 📱 Premium UX
+- **Lightning Fast**: Optimized context handling and render throttling ensure a "buttery smooth" typing experience.
+- **Mobile First**: Responsive glassmorphism design optimized for low-bandwidth 2G/3G connections.
+- **Dark Mode**: Eye-friendly interface for low-light environments.
+
+---
 
 ## 🛠️ Technology Stack
 
-*   **Backend:** Python, Django
-*   **Frontend:** HTML5, CSS3, JavaScript (Vanilla)
-*   **AI Engine:** Google Gemini 1.5 Flash (via Generative AI SDK)
-*   **Weather Data:** OpenWeatherMap API
-*   **Database:** SQLite (Default)
-*   **Speech Processing:** Web Speech API (Frontend) / Python SpeechRecognition (Backend fallbacks)
+- **Backend**: Python 3.10+ / Django 5.1+
+- **AI Models**: 
+  - **Gemini 1.5 Flash**: Multimodal reasoning, planning, and vision analysis.
+  - **Meta MMS**: Native language TTS (Hausa/Yoruba).
+  - **Edge-TTS**: English & Igbo (Nigerian Accent) speech synthesis.
+- **Data Integration**: OpenWeatherMap API
+- **Frontend**: Vanilla JS (ES6+), CSS3 (Modern Flex/Grid), HTML5.
+
+---
 
 ## 🚀 Getting Started
 
 ### Prerequisites
-
-*   Python 3.10+ (Recommended for torch/transformers)
-*   Pip
-*   Virtualenv (recommended)
-*   **FFmpeg** (Required for audio processing. Install via `apt install ffmpeg`, `brew install ffmpeg`, or download for Windows).
-
-> [!NOTE]
-> The first time you use Hausa or Yoruba voice features, the system will automatically download Meta's MMS models (~150MB each). This might cause a slight delay on the first request.
-
+- **Python 3.10+**
+- **FFmpeg**: Required for audio processing.
+  - *Windows*: Download from [Gyan.dev](https://www.gyan.dev/ffmpeg/builds/)
+  - *Linux*: `sudo apt install ffmpeg`
+  - *Mac*: `brew install ffmpeg`
 
 ### Installation
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/Abdul-Salam15/Farm-Buddy.git
-    cd Farm-Buddy
-    ```
+1. **Clone the Repo**
+   ```bash
+   git clone https://github.com/Abdul-Salam15/Farm-Buddy.git
+   cd Farm-Buddy
+   ```
 
-2.  **Create and activate a virtual environment:**
-    ```bash
-    python -m venv venv
-    # Windows
-    venv\Scripts\activate
-    # Linux/Mac
-    source venv/bin/activate
-    ```
+2. **Virtual Environment Setup**
+   ```bash
+   python -m venv venv
+   # Windows
+   venv\Scripts\activate
+   # Linux/Mac
+   source venv/bin/activate
+   ```
 
-3.  **Install dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
+3. **Install Dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-4.  **Set up environment variables:**
-    Create a `.env` file in the project root and add your API keys:
-    ```env
-    GOOGLE_API_KEY=your_gemini_api_key
-    OPENWEATHER_API_KEY=your_openweather_api_key
-    SECRET_KEY=your_django_secret_key
-    DEBUG=True
-    ```
+4. **Environment Variables**
+   Create a `.env` file in the project root:
+   ```env
+   GOOGLE_API_KEY=your_key_here
+   OPENWEATHER_API_KEY=your_key_here
+   SECRET_KEY=generate_a_random_string
+   DEBUG=True
+   ALLOWED_HOSTS=*
+   ```
 
-5.  **Run migrations:**
-    ```bash
-    python manage.py migrate
-    ```
+5. **Initialize Database**
+   ```bash
+   python manage.py migrate
+   ```
 
-6.  **Start the development server:**
-    ```bash
-    python manage.py runserver
-    ```
+6. **Start FarmBuddy**
+   ```bash
+   python manage.py runserver
+   ```
 
-7.  **Access the app:**
-    Open your browser and visit `http://127.0.0.1:8000/chat/`
+---
 
-## 🤝 Contribution
+## 💡 Usage Tips
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+- **First Run**: The Hausa and Yoruba voice models (~150MB each) are downloaded automatically on first use. Ensure you have a stable internet connection for the initial load.
+- **Browser TTS**: English responses use your browser's native speech engine for instant playback.
+- **Streaming**: You don't need to wait for the "Loading" state to end; text will appear as it arrives!
 
-## 📄 License
+---
 
-This project is licensed under the MIT License.
-
-## 👤 Author
-
-**Abdul-Salam15**
-*   Email: asalamadebayo@gmail.com
-*   GitHub: [Abdul-Salam15](https://github.com/Abdul-Salam15)
+## � License & Author
+- **License**: MIT
+- **Author**: Abdul-Salam15
+- **Contact**: [GitHub Profile](https://github.com/Abdul-Salam15)
