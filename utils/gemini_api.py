@@ -43,8 +43,8 @@ def ask_gemini(messages_history: list, weather_context=None, stream=False, langu
     # Convert Streamlit roles to Gemini roles
     gemini_history = []
     
-    # Process messages, limit to last 20 to improve speed
-    recent_messages = messages_history[-20:] if len(messages_history) > 20 else messages_history
+    # Process messages, limit to last 10 to improve speed
+    recent_messages = messages_history[-10:] if len(messages_history) > 10 else messages_history
     
     # Process all messages except the last one
     for msg in recent_messages[:-1]:
@@ -89,11 +89,12 @@ def ask_gemini(messages_history: list, weather_context=None, stream=False, langu
             return "I'm sorry, I cannot answer that request due to safety guidelines."
 
 
-def analyze_plant_image(image_path, conversation_history=None):
+def analyze_plant_image(image_path, conversation_history=None, stream=False):
     """
     Analyze a plant image for disease detection using Gemini Vision
     image_path: Path to the uploaded plant image
     conversation_history: Optional conversation context
+    stream: If True, returns a generator
     """
     from PIL import Image
     
@@ -113,17 +114,25 @@ Analyze this plant leaf image and provide:
 
 Use simple English and be practical. If you cannot identify a specific disease, explain what you observe and suggest consulting a local agricultural extension agent."""
 
-        # If there's conversation history, include it for context
-        if conversation_history:
-            # Use vision model with context
-            response = model.generate_content([prompt, img])
-        else:
-            # Just analyze the image
-            response = model.generate_content([prompt, img])
+        response = model.generate_content([prompt, img], stream=stream)
         
-        return response.text.strip()
+        if stream:
+            def stream_generator():
+                try:
+                    for chunk in response:
+                        if chunk.text:
+                            yield chunk.text
+                except Exception as e:
+                    print(f"Error during vision streaming: {e}")
+                    yield " [Error: Interrupted] "
+            return stream_generator()
+        else:
+            return response.text.strip()
         
     except Exception as e:
+        if stream:
+            def error_gen(): yield f"Error analyzing image: {str(e)}"
+            return error_gen()
         return f"Error analyzing image: {str(e)}"
 
 

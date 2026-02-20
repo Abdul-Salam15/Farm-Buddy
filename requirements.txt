@@ -6,3 +6,7 @@ SpeechRecognition
 pydub
 requests
 gTTS
+edge-tts
+torch
+transformers
+scipy

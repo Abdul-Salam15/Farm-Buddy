@@ -190,30 +190,38 @@ def upload_image(request):
         # Get the saved image path
         image_path = user_message.image.path
         
-        # Analyze image with Gemini Vision
-        try:
-            ai_response = analyze_plant_image(image_path)
-        except Exception as e:
-            print(f"Gemini Vision API Error: {str(e)}")
-            ai_response = "I'm sorry, I'm having trouble analyzing the image right now. Please try again or consult a local agricultural expert."
-        
-        # Save AI response
-        Message.objects.create(
-            conversation=conversation,
-            role='assistant',
-            content=ai_response
-        )
-        
-        # Update conversation title if first message
-        if conversation.messages.count() == 2:
-            conversation.title = "Plant Disease Analysis"
-            conversation.save()
-        
-        return JsonResponse({
-            'success': True,
-            'response': ai_response,
-            'image_url': user_message.image.url
-        })
+        from django.http import StreamingHttpResponse
+
+        # Save AI response placeholder and then yield chunks
+        def vision_response_generator():
+            full_response = ""
+            try:
+                # Analyze image with Gemini Vision in streaming mode
+                stream = analyze_plant_image(image_path, stream=True)
+                
+                for chunk in stream:
+                    full_response += chunk
+                    yield json.dumps({'chunk': chunk}) + "\n"
+                
+                # Save AI response to DB
+                Message.objects.create(
+                    conversation=conversation,
+                    role='assistant',
+                    content=full_response
+                )
+                
+                # Signal completion
+                yield json.dumps({'success': True, 'full_text': full_response, 'image_url': user_message.image.url}) + "\n"
+                
+                if conversation.messages.count() == 2:
+                    conversation.title = "Plant Disease Analysis"
+                    conversation.save()
+
+            except Exception as e:
+                print(f"Error in vision stream: {e}")
+                yield json.dumps({'success': False, 'error': str(e)}) + "\n"
+
+        return StreamingHttpResponse(vision_response_generator(), content_type='application/x-ndjson')
         
     except Exception as e:
         print(f"Error in upload_image: {str(e)}")
@@ -311,7 +319,7 @@ def transcribe_audio(request):
         try:
             # Upload to Gemini
             myfile = genai.upload_file(temp_path)
-            model = genai.GenerativeModel("gemini-1.5-flash")
+            model = genai.GenerativeModel("gemini-flash-lite-latest")
             
             prompt = f"Transcribe this audio exactly as spoken. The language is likely {language} (Hausa/Igbo/Yoruba/English). Return ONLY the transcription text, no other commentary."
             
@@ -329,16 +337,51 @@ def transcribe_audio(request):
             raise ignored
 
     except Exception as e:
+        try:
+            print(f"Streaming Error: {e}")
+        except:
+            pass
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
+# Global cache for MMS models
+mms_models = {}
+
+def load_mms_model(lang_code):
+    """Load and cache MMS model for a given language code"""
+    if lang_code in mms_models:
+        return mms_models[lang_code]
+    
+    # Map app codes to MMS codes
+    # yo -> yor, ig -> ibo, ha -> hau
+    iso_codes = {
+        'ha': 'hau',
+        'ig': 'ibo',
+        'yo': 'yor'
+    }
+    mms_code = iso_codes.get(lang_code, lang_code)
+    
+    model_id = f"facebook/mms-tts-{mms_code}"
+    try:
+        from transformers import VitsModel, AutoTokenizer
+        print(f"Loading MMS Model: {model_id}...")
+        tokenizer = AutoTokenizer.from_pretrained(model_id)
+        model = VitsModel.from_pretrained(model_id)
+        mms_models[lang_code] = (tokenizer, model)
+        return tokenizer, model
+    except Exception as e:
+        print(f"Error loading MMS model {model_id}: {e}")
+        return None, None
+
 @require_http_methods(["POST"])
 def speak_text(request):
-    """Convert text to speech using gTTS"""
+    """Convert text to speech using MMS (Native) + Edge-TTS (English)"""
     try:
-        from gtts import gTTS
         from django.http import HttpResponse
         import io
+        import torch
+        import scipy.io.wavfile as wav
+        import numpy as np
         
         data = json.loads(request.body)
         text = data.get('text', '').strip()
@@ -347,25 +390,70 @@ def speak_text(request):
         if not text:
             return JsonResponse({'success': False, 'error': 'No text provided'}, status=400)
         
-        # Map to gTTS codes (ha, ig, yo are supported)
-        # Fallback to English if not supported
-        lang_code = language if language in ['en', 'ha', 'ig', 'yo'] else 'en'
-        
-        # Clean text (remove markdown asterisks etc)
+        # Clean text
         clean_text = text.replace('*', '').replace('#', '')
         
-        # Generate audio
-        tts = gTTS(text=clean_text, lang=lang_code, slow=False)
+        audio_fp = io.BytesIO()
+        content_type = 'audio/wav' # Default for MMS
+
+        # Strategy Selection
+        if language in ['ha', 'yo']:
+            # Use Meta MMS (Native Quality)
+            tokenizer, model = load_mms_model(language)
+            
+            if tokenizer and model:
+                inputs = tokenizer(clean_text, return_tensors="pt")
+                with torch.no_grad():
+                    output = model(**inputs).waveform
+                
+                # Convert to wav
+                output_np = output.numpy().squeeze()
+                
+                # Write to BytesIO
+                wav.write(audio_fp, model.config.sampling_rate, output_np)
+                audio_fp.seek(0)
+            else:
+                 return JsonResponse({'success': False, 'error': f'Failed to load model for {language}'}, status=500)
         
-        # Save to memory buffer
-        mp3_fp = io.BytesIO()
-        tts.write_to_fp(mp3_fp)
-        mp3_fp.seek(0)
+        else:
+            # Igbo or English -> edge-tts (Nigerian English Accent)
+            import asyncio
+            import edge_tts
+            
+            content_type = 'audio/mpeg'
+            # Use Ezinne for Igbo specifically, Abeo for others
+            voice = "en-NG-EzinneNeural" if language == 'ig' else "en-NG-AbeoNeural"
+            
+            async def get_edge_audio():
+                communicate = edge_tts.Communicate(clean_text, voice)
+                async for chunk in communicate.stream():
+                    if chunk["type"] == "audio":
+                        audio_fp.write(chunk["data"])
+
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(get_edge_audio())
+                loop.close()
+            except Exception as e:
+                print(f"EdgeTTS Error: {e}")
+                # Fallback to gTTS if edge-tts fails
+                from gtts import gTTS
+                tts = gTTS(text=clean_text, lang='en', slow=False)
+                audio_fp = io.BytesIO() # Reset
+                tts.write_to_fp(audio_fp)
+                content_type = 'audio/mpeg'
+
+            audio_fp.seek(0)
         
-        response = HttpResponse(mp3_fp.read(), content_type='audio/mpeg')
-        response['Content-Disposition'] = 'inline; filename="response.mp3"'
+        response = HttpResponse(audio_fp.read(), content_type=content_type)
+        ext = 'wav' if content_type == 'audio/wav' else 'mp3'
+        response['Content-Disposition'] = f'inline; filename="response.{ext}"'
         return response
         
     except Exception as e:
-        print(f"TTS Error: {e}")
+        try:
+            print(f"TTS Error: {e}")
+        except:
+            pass
         return JsonResponse({'success': False, 'error': str(e)}, status=500)

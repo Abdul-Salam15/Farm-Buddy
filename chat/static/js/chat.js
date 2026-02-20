@@ -82,6 +82,24 @@ function updateLanguage(lang) {
     const langSelect = document.getElementById('languageSelect');
     if (langSelect) langSelect.value = lang;
 
+    // Update Speech Recognition Language
+    if (recognition) {
+        const recognitionLangs = {
+            'en': 'en-US',
+            'ha': 'ha-NG',
+            'ig': 'ig-NG',
+            'yo': 'yo-NG'
+        };
+        recognition.lang = recognitionLangs[lang] || 'en-US';
+        // If recording, restart to apply language change
+        if (isRecording) {
+            recognition.stop();
+            // Restart will be handled by onend if we don't set isRecording to false here, 
+            // but we might want to manually restart to be sure. 
+            // Simpler: just set the property, it might apply on next start.
+        }
+    }
+
     const t = translations[lang];
     if (!t) return;
 
@@ -351,59 +369,69 @@ document.addEventListener('DOMContentLoaded', function () {
                             language: currentLanguage
                         })
                     });
+                }
 
-                    // Streaming Logic
-                    const reader = response.body.getReader();
-                    const decoder = new TextDecoder();
+                // Shared Streaming Logic
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
 
-                    addMessage('assistant', '', null, false);
-                    const lastMessageDiv = messagesContainer.lastElementChild;
-                    const textDiv = lastMessageDiv.querySelector('.message-text');
-                    const contentDiv = lastMessageDiv.querySelector('.message-content');
+                addMessage('assistant', '', null, false);
+                const lastMessageDiv = messagesContainer.lastElementChild;
+                const textDiv = lastMessageDiv.querySelector('.message-text');
+                const contentDiv = lastMessageDiv.querySelector('.message-content');
 
-                    let fullText = "";
-                    let buffer = "";
+                let fullText = "";
+                let buffer = "";
+                let lastRenderTime = 0;
+                const RENDER_THROTTLE = 100; // ms
 
-                    removeLoading();
+                removeLoading();
 
-                    while (true) {
-                        const { done, value } = await reader.read();
-                        if (done) break;
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
 
-                        buffer += decoder.decode(value, { stream: true });
-                        const lines = buffer.split('\n');
-                        buffer = lines.pop() || "";
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || "";
 
-                        for (const line of lines) {
-                            if (!line.trim()) continue;
-                            try {
-                                const data = JSON.parse(line);
-                                if (data.chunk) {
-                                    fullText += data.chunk;
+                    for (const line of lines) {
+                        if (!line.trim()) continue;
+                        try {
+                            const data = JSON.parse(line);
+                            if (data.chunk) {
+                                fullText += data.chunk;
+
+                                // Throttle rendering to keep UI responsive
+                                const now = Date.now();
+                                if (now - lastRenderTime > RENDER_THROTTLE) {
                                     if (typeof marked !== 'undefined') {
                                         textDiv.innerHTML = marked.parse(fullText);
                                     } else {
                                         textDiv.textContent = fullText;
                                     }
                                     scrollToBottom();
-                                } else if (data.error) {
-                                    textDiv.textContent += "\n[Error: " + data.error + "]";
-                                } else if (data.full_text) {
-                                    fullText = data.full_text;
+                                    lastRenderTime = now;
                                 }
-                            } catch (e) {
-                                console.error("Error parsing stream chunk:", e);
+                            } else if (data.error) {
+                                textDiv.textContent += "\n[Error: " + data.error + "]";
+                            } else if (data.full_text) {
+                                fullText = data.full_text;
                             }
+                        } catch (e) {
+                            console.error("Error parsing stream chunk:", e);
                         }
                     }
-                    addSpeakerButton(contentDiv, fullText);
                 }
 
-                if (response && !response.ok && !response.body) {
-                    // Handle non-streaming errors if any
-                    const errData = await response.json();
-                    throw new Error(errData.error || 'Request failed');
+                // Final render
+                if (typeof marked !== 'undefined') {
+                    textDiv.innerHTML = marked.parse(fullText);
+                } else {
+                    textDiv.textContent = fullText;
                 }
+                scrollToBottom();
+                addSpeakerButton(contentDiv, fullText);
 
             } catch (error) {
                 removeLoading();
@@ -498,10 +526,17 @@ const supportsTTS = 'speechSynthesis' in window;
 
 if (supportsVoice) {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognitionLangs = {
+        'en': 'en-US',
+        'ha': 'ha-NG',
+        'ig': 'ig-NG',
+        'yo': 'yo-NG'
+    };
     recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = 'en-US';
+    // Set initial language
+    recognition.lang = recognitionLangs[currentLanguage] || 'en-US';
 
     let finalTranscript = '';
 
@@ -696,53 +731,124 @@ function removeLoading() {
     }
 }
 
-function speakMessage(text, button) {
-    if (!supportsTTS) {
-        alert('Text-to-speech is not supported in your browser.');
+let currentAudio = null;
+
+async function speakMessage(text, button) {
+    // 1. Check if the button was ALREADY playing before we stop anything
+    const wasPlaying = button.classList.contains('playing');
+
+    // 2. Stop any currently playing audio (Backend Audio)
+    if (currentAudio) {
+        currentAudio.pause();
+        currentAudio = null;
+    }
+
+    // 3. Stop any browser native TTS (Frontend Audio)
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+    }
+
+    // 4. Reset all buttons to 'Listen' state
+    document.querySelectorAll('.speaker-btn').forEach(btn => {
+        btn.classList.remove('playing');
+        const span = btn.querySelector('span');
+        if (span) span.textContent = 'Listen';
+    });
+
+    // 5. If it was playing, we stop here (Toggle Off)
+    if (wasPlaying) {
         return;
     }
 
-    if (button.classList.contains('playing')) {
-        speechSynthesis.cancel();
-        button.classList.remove('playing');
-        button.querySelector('span').textContent = 'Listen';
-        return;
-    }
-
-    if (speechSynthesis.speaking) {
-        speechSynthesis.cancel();
-        document.querySelectorAll('.speaker-btn').forEach(btn => {
-            btn.classList.remove('playing');
-            btn.querySelector('span').textContent = 'Listen';
-        });
-    }
-
+    // 6. Setup UI for Loading/Playing
     button.classList.add('playing');
-    button.querySelector('span').textContent = 'Stop';
+    const span = button.querySelector('span');
+    if (span) span.textContent = 'Loading...';
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.9;
-    utterance.pitch = 1.0;
-    utterance.volume = 1.0;
-    utterance.lang = 'en-US';
+    // 6. Fast Path: Use Browser TTS for English
+    if (currentLanguage === 'en' && 'speechSynthesis' in window) {
+        // Use browser TTS for speed
+        if (span) span.textContent = 'Stop';
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'en-US';
+        utterance.rate = 1.0;
 
-    const voices = speechSynthesis.getVoices();
-    const englishVoice = voices.find(voice => voice.lang.startsWith('en'));
-    if (englishVoice) {
-        utterance.voice = englishVoice;
+        // Try to find a good English voice
+        const voices = speechSynthesis.getVoices();
+        const englishVoice = voices.find(v => v.lang.startsWith('en'));
+        if (englishVoice) utterance.voice = englishVoice;
+
+        utterance.onend = function () {
+            button.classList.remove('playing');
+            if (span) span.textContent = 'Listen';
+        };
+        utterance.onerror = function () {
+            button.classList.remove('playing');
+            if (span) span.textContent = 'Listen';
+        };
+
+        window.speechSynthesis.speak(utterance);
+        return;
     }
 
-    utterance.onend = function () {
-        button.classList.remove('playing');
-        button.querySelector('span').textContent = 'Listen';
-    };
+    // 7. Slow Path: Use Backend TTS for Hausa/Igbo/Yoruba (Better Quality)
+    try {
+        // Add a timeout to the fetch to avoid infinite loading
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 120000); // 120s timeout for local AI model download/inference
 
-    utterance.onerror = function () {
-        button.classList.remove('playing');
-        button.querySelector('span').textContent = 'Listen';
-    };
+        const response = await fetch('/chat/api/speak/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                text: text,
+                language: currentLanguage
+            }),
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
 
-    speechSynthesis.speak(utterance);
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || 'TTS request failed');
+        }
+
+        const blob = await response.blob();
+        const audioUrl = URL.createObjectURL(blob);
+        currentAudio = new Audio(audioUrl);
+
+        currentAudio.onended = function () {
+            button.classList.remove('playing');
+            if (span) span.textContent = 'Listen';
+            currentAudio = null;
+        };
+
+        currentAudio.onerror = function () {
+            console.error('Audio playback error');
+            button.classList.remove('playing');
+            if (span) span.textContent = 'Listen';
+            alert('Error playing audio.');
+        };
+
+        // Update button to 'Stop' state
+        if (span) span.textContent = 'Stop';
+
+        await currentAudio.play();
+
+    } catch (error) {
+        console.error('TTS Error:', error);
+        button.classList.remove('playing');
+        if (span) span.textContent = 'Listen';
+
+        if (error.name === 'AbortError') {
+            alert('Network slow. Generating voice is taking too long.');
+        } else {
+            alert('Failed to generate speech. Please try again later.');
+        }
+    }
 }
 
 // Rename chat
@@ -793,5 +899,3 @@ window.deleteConversation = async function (id) {
         }
     }
 };
-
-

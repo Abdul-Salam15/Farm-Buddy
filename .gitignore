@@ -22,3 +22,14 @@ media/
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# Temporary Test Files
+test_*.py
+test_*.mp3
+test_*.wav
+check_*.py
+list_*.py
+search_*.py
+find_*.py
+probe_*.py
+voice_debug.log
