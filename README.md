@@ -30,9 +30,14 @@ The system leverages **Google's Gemini AI** for reasoning and **OpenWeatherMap**
 
 ### Prerequisites
 
-*   Python 3.8+
+*   Python 3.10+ (Recommended for torch/transformers)
 *   Pip
 *   Virtualenv (recommended)
+*   **FFmpeg** (Required for audio processing. Install via `apt install ffmpeg`, `brew install ffmpeg`, or download for Windows).
+
+> [!NOTE]
+> The first time you use Hausa or Yoruba voice features, the system will automatically download Meta's MMS models (~150MB each). This might cause a slight delay on the first request.
+
 
 ### Installation
 
